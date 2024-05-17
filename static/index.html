@@ -1,9 +1,164 @@
-<html>
-    <head>
-        <title>VS Code Rocks!</title>
-    </head>
-    <body>
-        <h1>VS Code can do that?</h1>
-        <p>Yes it can!</p>
-    </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Streaming IO</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #000;
+      color: #fff;
+    }
+
+    #video-container {
+      position: relative;
+    }
+
+    video {
+      width: 100%;
+      height: auto;
+    }
+
+    #stream-btn {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #fff;
+      color: #000;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="video-container">
+    <video id="video" autoplay muted></video>
+    <video id="output-vid" style="width: 12em; border: #0ff 3px solid;" autoplay muted></video>
+    <button id="stream-btn">Start Streaming</button>
+
+    
+
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const output = document.getElementById('output-vid');
+    const streamBtn = document.getElementById('stream-btn');
+    const BACKEND = '';
+    let stream;
+    let peerConnection;
+    let localStream;
+
+    let remoteStream;
+
+    servers = {
+    iceServers: [
+        {
+            "urls":['stun:stun3.l.google.com:19302',
+            'stun:stun1.l.google.com:19302',
+            'stun:stun2.l.google.com:19302'],
+        },
+
+    ],
+    iceCandidatePoolSize: 10,
+    }
+
+    // Function to create peer connection
+    async function createPeerConnection() {
+      peerConnection = new RTCPeerConnection(servers);
+
+      // Add local stream to peer connection
+      localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream);
+      });
+      
+      let offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer)
+
+      // Event listener for ICE candidates
+      peerConnection.onicecandidate = handleICECandidate;
+
+     resp =  await sendSignalingData(offer,'offer')
+     data = await resp.json()
+     console.log(data)
+     peerConnection.ontrack = event => {
+        console.log('Got remote track:', event.streams[0])
+        remoteStream = event.streams[0]
+        console.log(remoteStream.getVideoTracks()[0])
+        output.srcObject = remoteStream
+        
+      }
+
+     await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer))
+    
+    }
+
+ 
+    // Function to handle ICE candidates
+    function handleICECandidate(event) {
+      if (event.candidate) {
+        // Send ICE candidate to backend
+        resp = sendSignalingData(event.candidate.toJSON(),'candidate')
+      }
+    }
+
+    // Function to send signaling data to backend
+    async function sendSignalingData(data,route) {
+      response  = await fetch(BACKEND+ route, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      return response;
+     
+    }
+
+    // Start streaming function
+    async function startStreaming() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        video.srcObject = stream;
+        streamBtn.textContent = 'Stop Streaming';
+        streamBtn.removeEventListener('click', startStreaming);
+        streamBtn.addEventListener('click', stopStreaming);
+        localStream = stream;
+
+        // Create peer connection
+        createPeerConnection();
+      } catch (error) {
+        console.error('Error accessing user media:', error);
+      }
+    }
+
+    // Stop streaming function
+    function stopStreaming() {
+      if (stream)
+ {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+        streamBtn.textContent = 'Start Streaming';
+        streamBtn.removeEventListener('click', stopStreaming);
+        streamBtn.addEventListener('click', startStreaming);
+        output.srcObject = null;
+        console.log(peerConnection.connectionState)
+        peerConnection.close();
+        console.log(peerConnection.connectionState)
+        peerConnection = null
+      }
+    }
+
+    // Add click event listener to start streaming button
+    streamBtn.addEventListener('click', startStreaming);
+  </script>
+</body>
 </html>

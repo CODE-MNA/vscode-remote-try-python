@@ -1,1 +1,7 @@
-flask
+flask[async]
+aiortc
+pillow
+fastapi
+uvicorn
+numpy
+opencv-python
